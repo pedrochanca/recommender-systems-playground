@@ -60,4 +60,5 @@ Here is the flow of data:
 #### nn.Linear()
 
 In this context, it performs a weighted sum of the input features plus a bias term. Mathematically we have:
+
 $$\hat{y}_{u,i} = \mathbf{W} \mathbf{x}_{u,i} + b$$
