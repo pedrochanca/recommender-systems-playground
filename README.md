@@ -1,4 +1,4 @@
-# Graphs For Recommendation Experimentation
+# Graphs For Recommendation - Exploration
 
 In this repo, you will find different experiments on Graph-based models for recommendation systems. 
 
