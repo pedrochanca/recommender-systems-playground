@@ -88,3 +88,20 @@ Below is a trace of the data shapes and values for a single prediction:
 
     5. Output:
         - Predicted Rating (e.g., 3.5).
+
+--------------------------------------------------------------------
+
+## NCF (MLP version)
+
+
+--------------------------------------------------------------------
+
+
+## Next Steps
+
+- NCF (MLP version)
+
+- NCF (MLP version) beyond embedding look-ups (features)
+    - Potentially try out other datasets
+
+- Metrics used (which and why)
