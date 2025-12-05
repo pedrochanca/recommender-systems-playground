@@ -94,7 +94,37 @@ Below is a trace of the data shapes and values for a single prediction:
 
 --------------------------------------------------------------------
 
-## NCF (MLP version)
+## DeepNCF (Multi-Layer Perceptron)
+
+This improved model replaces the single linear layer with a deep neural network (MLP) to capture non-linear interactions between users and items.
+
+### Model Architecture
+
+The architecture extends the baseline by adding hidden layers with ReLU activations.
+
+#### The Forward Pass
+
+1.  **Input**: User ID and Item ID.
+2.  **Embedding Lookup**: IDs are mapped to dense vectors (size 32).
+3.  **Concatenation**: User and Item vectors are joined (size 64).
+4.  **MLP Layers**:
+    * **Layer 1**: Linear (64 $\to$ 64) + ReLU + Dropout
+    * **Layer 2**: Linear (64 $\to$ 32) + ReLU + Dropout
+    * **Output Layer**: Linear (32 $\to$ 1)
+
+#### Mathematical Formulation
+
+For user $u$ and item $i$, the input vector $\mathbf{x}_0$ is the concatenated embedding. The deep network transforms this input through $L$ layers. For a hidden layer $l$:
+
+$$
+\mathbf{x}_l = \sigma(\mathbf{W}_l \mathbf{x}_{l-1} + \mathbf{b}_l)
+$$
+
+Where $\sigma$ is the activation function (ReLU). The final score $\hat{y}_{u,i}$ is produced by the output layer:
+
+$$
+\hat{y}_{u,i} = \mathbf{W}_{out} \mathbf{x}_{last} + b_{out}
+$$
 
 
 --------------------------------------------------------------------
