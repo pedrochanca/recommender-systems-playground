@@ -4,6 +4,9 @@ In this repo, you will find different experiments on Graph-based models for reco
 
 The goal is to have a better understanding of how these architectures work, starting with standard baselines and moving toward Graph Neural Networks (GNNs).
 
+## Prerequisites
+* **Python 3.12+**
+
 ## Setup
 
 Install requirements (e.g., inside a `pyenv` or `conda` environment):
