@@ -32,17 +32,10 @@ jobs:
 
           echo "Date block: $DATE_BLOCK"
 
-          # 4. Use 'sed' to replace a placeholder line in README.md
-          # It looks for a line starting with '' and replaces 
-          # it and the next lines up to '' with the new content.
-          # We use a unique marker to ensure only this specific block is updated.
-
-          # First, prepare the replacement string, escaping newlines for sed
-          REPLACEMENT=$(echo -e "\n$DATE_BLOCK\n")
-
-          # The sed command needs to be tailored for different systems/shells
-          # This version works well on Ubuntu runner:
-          sed -i -e '//,//c\'"$REPLACEMENT" README.md
+          # 4. Use 'sed' to replace a single placeholder line in README.md
+          # Use the 's' command (substitute) and '@' as the delimiter for safety.
+          # s@OLD_STRING@NEW_STRING@
+          sed -i 's@@'"$DATE_BLOCK"'@g' README.md
 
           # Check if the file was modified
           if [ -n "$(git status --porcelain README.md)" ]; then

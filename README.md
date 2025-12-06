@@ -9,7 +9,7 @@ The goal is to have a better understanding of how these architectures work, star
 ## Prerequisites
 * **Python 3.12+**
 
-## Setup
+## Setup 
 
 Install requirements (e.g., inside a `pyenv` or `conda` environment):
 
