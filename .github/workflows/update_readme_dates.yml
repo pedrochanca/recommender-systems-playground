@@ -27,11 +27,16 @@ jobs:
           # 3. Create the replacement string
           DATE_BLOCK="**Created On**: $CREATED_ON | **Last Updated**: $LAST_UPDATED"
 
-          echo "Date block: $DATE_BLOCK"
+          # Debug: Print what we found to the logs
+          echo "Found dates: $DATE_BLOCK"
 
-          # 4. Use 'sed' to replace the unique placeholder
-          # The pattern is now set to the placeholder string.
-          sed -i 's@@'"$DATE_BLOCK"'@g' README.md
+          # 4. Use 'sed' to replace the plain text placeholder
+          # We search for "DATE_PLACEHOLDER" and replace it with the dates
+          sed -i 's@DATE_PLACEHOLDER@'"$DATE_BLOCK"'@g' README.md
+
+          # 5. Verify: Print the last few lines of README to show if it worked
+          echo "--- Content of README after sed ---"
+          tail -n 10 README.md
 
           # Check if the file was modified
           if [ -n "$(git status --porcelain README.md)" ]; then
