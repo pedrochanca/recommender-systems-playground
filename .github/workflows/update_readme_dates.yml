@@ -19,7 +19,7 @@ jobs:
         id: dates
         run: |
           # 1. Get the date of the first commit (Creation Date)
-          CREATED_AT=$(git log --diff-filter=A --follow --format=%ad --date=format:'%Y-%m-%d' -- README.md | tail -1)
+          CREATED_ON=$(git log --diff-filter=A --follow --format=%ad --date=format:'%Y-%m-%d' -- README.md | tail -1)
 
           # 2. Get the date of the last commit (Last Updated)
           LAST_UPDATED=$(git log -1 --format=%ad --date=format:'%Y-%m-%d' -- README.md)
@@ -28,7 +28,7 @@ jobs:
           # Note: We use sed to replace a placeholder line in the README
 
           # Use simple Markdown text block for clarity
-          DATE_BLOCK="**Created At:** $CREATED_AT\n**Last Updated:** $LAST_UPDATED"
+          DATE_BLOCK="**Created On:** $CREATED_ON | **Last Updated:** $LAST_UPDATED"
 
           echo "Date block: $DATE_BLOCK"
 
