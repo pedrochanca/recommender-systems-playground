@@ -53,7 +53,7 @@ jobs:
 
       - name: Commit and Push Changes (if file was updated)
         if: steps.dates.outputs.files_changed == 'true'
-        uses: stefanprodan/git-ensure-action@v1
+        uses: stefanprodan/git-ensure-action@v1 #
         with:
           commit_message: "🤖 chore: Auto-update README dates"
           commit_author: "GitHub Actions <actions@github.com>"
