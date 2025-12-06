@@ -24,17 +24,13 @@ jobs:
           # 2. Get the date of the last commit (Last Updated)
           LAST_UPDATED=$(git log -1 --format=%ad --date=format:'%Y-%m-%d' -- README.md)
 
-          # 3. Create the badge content (or just simple text)
-          # Note: We use sed to replace a placeholder line in the README
-
-          # Use simple Markdown text block for clarity
+          # 3. Create the replacement string
           DATE_BLOCK="**Created On**: $CREATED_ON | **Last Updated**: $LAST_UPDATED"
 
           echo "Date block: $DATE_BLOCK"
 
-          # 4. Use 'sed' to replace a single placeholder line in README.md
-          # Use the 's' command (substitute) and '@' as the delimiter for safety.
-          # s@OLD_STRING@NEW_STRING@
+          # 4. Use 'sed' to replace the unique placeholder
+          # The pattern is now set to the placeholder string.
           sed -i 's@@'"$DATE_BLOCK"'@g' README.md
 
           # Check if the file was modified
