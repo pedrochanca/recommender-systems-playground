@@ -1,6 +1,6 @@
 # Graphs For Recommendation - Exploration
 
-DATE_PLACEHOLDER
+**Created On**: Nov 17, 2025 | **Last Updated**: Dec 06, 2025
 
 In this repo, you will find different experiments on Graph-based models for recommendation systems. 
 
