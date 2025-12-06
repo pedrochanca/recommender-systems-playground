@@ -10,31 +10,27 @@ jobs:
   update-dates:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # IMPORTANT: Ensures the Action can push back to the repo
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Needed to calculate creation date correctly
+          fetch-depth: 0
 
       - name: Calculate and Update Dates
         run: |
-          # The format string is changed from '%Y-%m-%d' to '%b %d, %Y'
-
-          # 1. Get the date of the first commit (Creation Date)
+          # 1. Get dates in the desired format
           CREATED_ON=$(git log --diff-filter=A --follow --format=%ad --date=format:'%b %d, %Y' -- README.md | tail -1)
-
-          # 2. Get the date of the last commit (Last Updated)
           LAST_UPDATED=$(git log -1 --format=%ad --date=format:'%b %d, %Y' -- README.md)
 
-          # 3. Prepare the replacement text
-          DATE_BLOCK="**Created On**: $CREATED_ON | **Last Updated**: $LAST_UPDATED"
+          # 2. Build the new line AND KEEP THE MARKERS
+          # We wrap the dates inside the markers so the script can find them again next time.
+          NEW_CONTENT="**Created On**: $CREATED_ON | **Last Updated**: $LAST_UPDATED "
 
-          echo "Found dates: $DATE_BLOCK"
+          # 3. Use sed to match the line starting with START and ending with END
+          # regex: .* sed -i "s@.*@$NEW_CONTENT@g" README.md
 
-          # 4. REPLACE "DATE_PLACEHOLDER" with the calculated dates
-          sed -i 's@DATE_PLACEHOLDER@'"$DATE_BLOCK"'@g' README.md
-
+          # Debug
           git diff README.md
 
       - name: Commit updated README

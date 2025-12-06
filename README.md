@@ -1,6 +1,6 @@
 # Graphs For Recommendation - Exploration
 
-DATE_PLACEHOLDER
+` `
 
 In this repo, you will find different experiments on Graph-based models for recommendation systems. 
 
