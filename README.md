@@ -1,7 +1,7 @@
 # Graphs For Recommendation - Exploration
 
-` `
- 
+![Dates](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pedrochanca/graphs-for-recommendation-experimentation/badges/dates.json)
+
 In this repo, you will find different experiments on Graph-based models for recommendation systems. 
 
 The goal is to have a better understanding of how these architectures work, starting with standard baselines and moving toward Graph Neural Networks (GNNs).

@@ -1,41 +1,32 @@
-name: Update README Dates
+name: Update Date Badge
 on:
   push:
     branches:
       - master
-    paths:
-      - "README.md"
-
 jobs:
-  update-dates:
+  update-badge:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Calculate and Update Dates
+      - name: Generate Badge JSON
         run: |
-          # 1. Get dates in the desired format
-          CREATED_ON=$(git log --diff-filter=A --follow --format=%ad --date=format:'%b %d, %Y' -- README.md | tail -1)
-          LAST_UPDATED=$(git log -1 --format=%ad --date=format:'%b %d, %Y' -- README.md)
+          # 1. Calculate Dates
+          CREATED=$(git log --diff-filter=A --follow --format=%ad --date=format:'%b %d, %Y' -- README.md | tail -1)
+          UPDATED=$(git log -1 --format=%ad --date=format:'%b %d, %Y' -- README.md)
 
-          # 2. Build the new line AND KEEP THE MARKERS
-          # We wrap the dates inside the markers so the script can find them again next time.
-          NEW_CONTENT="**Created On**: $CREATED_ON | **Last Updated**: $LAST_UPDATED "
+          # 2. Create JSON file for Shields.io
+          # We save it to a folder named 'badges'
+          mkdir -p badges
+          echo "{ \"schemaVersion\": 1, \"label\": \"Project Dates\", \"message\": \"Created: $CREATED | Updated: $UPDATED\", \"color\": \"blue\" }" > badges/dates.json
 
-          # 3. Use sed to match the line starting with START and ending with END
-          # regex: .* sed -i "s@.*@$NEW_CONTENT@g" README.md
-
-          # Debug
-          git diff README.md
-
-      - name: Commit updated README
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Deploy to Badges Branch
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          commit_message: "🤖 chore: Auto-update README dates"
-          branch: master
-          file_pattern: README.md
+          branch: badges # Pushes to a branch named 'badges'
+          folder: badges # Pushes the contents of the 'badges' folder
