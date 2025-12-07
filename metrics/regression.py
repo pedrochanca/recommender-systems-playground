@@ -10,7 +10,7 @@ from sklearn.metrics import root_mean_squared_error
 # --------------------------------------------------------------------------------------
 
 
-def compute_rmse(
+def rmse(
     model: torch.nn.Module,
     test_loader: torch.utils.data.DataLoader,
     device: torch.device,
@@ -139,7 +139,7 @@ def collect_user_predictions(
     return user_pred_true
 
 
-def compute_precision_recall_at_k(
+def precision_recall_at_k(
     user_pred_true: Dict[int, List[Tuple[float, float]]],
     k: int = 10,
     threshold: float = 3.5,

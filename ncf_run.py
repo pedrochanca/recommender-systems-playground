@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import argparse
 
 from torch.utils.data import Dataset, DataLoader
@@ -11,6 +12,7 @@ import matplotlib.pyplot as plt
 
 
 from models.ncf import SimpleNCF, DeepNCF
+from metrics.regression import collect_user_predictions, rmse, precision_recall_at_k
 
 
 class ExplicitDataset(Dataset):
@@ -240,6 +242,10 @@ def main():
 
     loss_func = nn.MSELoss(reduction="none")
 
+    # ----------------------------------------------------------------------------------
+    # ------ Train
+    # ----------------------------------------------------------------------------------
+
     model, all_losses_list = train_model(
         train_loader, device, model, loss_func, optimizer, epochs=EPOCHS
     )
@@ -248,6 +254,32 @@ def main():
     plt.figure()
     plt.plot(all_losses_list)
     plt.show()
+
+    # ----------------------------------------------------------------------------------
+    # ------ Evaluation (Test set)
+    # ----------------------------------------------------------------------------------
+
+    # Standard, accurate RMSE over all individual ratings
+    rmse_per_sample = rmse(model, test_loader, device, mode="per_sample")
+    print("Per-sample RMSE: {}".format(np.round(rmse_per_sample, 4)))
+
+    K = [1, 3, 5, 10, 20, 50, 100]
+    THRESHOLD = 3.5
+    user_pred_true = collect_user_predictions(model, test_loader, device)
+
+    for k in K:
+
+        precisions, recalls = precision_recall_at_k(
+            user_pred_true, k=k, threshold=THRESHOLD
+        )
+
+        total_precision = sum(precision for precision in precisions.values()) / len(
+            precisions
+        )
+        total_recall = sum(recall for recall in recalls.values()) / len(recalls)
+
+        print("Precision @ {}: {}".format(k, np.round(total_precision, 4)))
+        print("Recall @ {}: {} \n".format(k, np.round(total_recall, 4)))
 
 
 if __name__ == "__main__":
