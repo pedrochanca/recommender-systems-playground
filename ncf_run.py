@@ -152,12 +152,12 @@ def prep_batch(
 
 
 def train_model(
-    train_loader,
-    device,
+    loader,
     model,
     loss_func,
     optimizer,
     scheduler,
+    device: str,
     epochs: int = 1,
     log_every: int = 1000,
 ):
@@ -189,11 +189,10 @@ def train_model(
     all_losses_list = []
 
     for epoch_i in range(epochs):
-        for i, train_data in enumerate(train_loader):
-            # move data to device
-            users = train_data["users"].to(device)
-            items = train_data["items"].to(device)
-            targets = train_data["targets"].to(device)
+        for i, batch in enumerate(loader):
+            users = batch["users"].to(device)
+            items = batch["items"].to(device)
+            targets = batch["targets"].to(device)
 
             # foward pass
             pred_target = model(users, items)
@@ -237,6 +236,29 @@ def train_model(
     return model, all_losses_list
 
 
+def evaluate_model(loader, model, loss_func, device: str):
+    model.eval()  # Important: turns off dropout!
+
+    total_loss = 0
+    total_samples = 0
+
+    with torch.no_grad():  # Important: saves memory, no gradients
+        for batch in loader:
+            users = batch["users"].to(device)
+            items = batch["items"].to(device)
+            targets = batch["targets"].to(device).view(-1, 1).float()
+
+            pred_target = model(users, items)
+            true_target = targets.view(targets.size(0), -1).to(torch.float32)
+
+            loss = loss_func(pred_target, true_target)
+
+            total_loss += loss.sum().item()
+            total_samples += users.size(0)
+
+    return total_loss / total_samples
+
+
 """
 
 train / test - 0.9 / 0.1
@@ -248,9 +270,23 @@ train / val / test - 0.8 / 0.1 / 0.1
 """
 
 
-def run_tuning():
+import itertools
 
-    return None
+
+def run_tuning(tuning_config):
+    grid = tuning_config["grid"]
+    fixed = tuning_config["fixed"]
+
+    # Generate all combinations from the grid
+    keys, values = zip(*grid.items())
+    combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+
+    for trial_params in combinations:
+        # 2. MERGE: Combine fixed settings with current trial settings
+        # This ensures 'step_size' and 'gamma' are available
+        current_args = {**fixed, **trial_params}
+
+        print(f"Testing: {current_args}")
 
 
 def run_evaluation():
@@ -265,6 +301,7 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
     # ----------------------------------------------------------------------------------
 
     RANDOM_SEED = CONFIG["system"]["random_seed"]
+    DEVICE = CONFIG["system"]["device"]
 
     TRAIN_SPLIT = CONFIG["data"]["train_split"]
     VAL_SPLIT = CONFIG["data"]["val_split"]
@@ -275,8 +312,6 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
     EPOCHS = 1
 
     LOG_EVERY = 20
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ----------------------------------------------------------------------------------
     # ------ Data / batch setup
@@ -304,12 +339,26 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
     # ----------------------------------------------------------------------------------
 
     if TUNE:
-        train_loader, test_loader = prep_batch(
-            train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
-        )
+        # train_loader, test_loader = prep_batch(
+        #     train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
+        # )
+
+        run_tuning(CONFIG["tuning"])
 
     else:
+        # ------------------------------------------------------------------------------
+        # ------ Model Related Parameters
+        # ------------------------------------------------------------------------------\
+
         BATCH_SIZE = CONFIG[MODEL_ARCHITECTURE]["batch_size"]
+        EPOCHS = CONFIG[MODEL_ARCHITECTURE]["epochs"]
+        LOG_EVERY = CONFIG[MODEL_ARCHITECTURE]["log_every"]
+        STEP_SIZE = CONFIG[MODEL_ARCHITECTURE]["step_size"]
+        GAMMA = CONFIG[MODEL_ARCHITECTURE]["gamma"]
+
+        # ------------------------------------------------------------------------------
+        # ------ Batch Preparation
+        # ------------------------------------------------------------------------------
 
         train_loader, test_loader = prep_batch(
             train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
@@ -323,7 +372,10 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
         try:
             # Get the class by name from global scope
             model_class = globals()[MODEL_ARCHITECTURE]
-            model = model_class(n_users=n_users, n_items=n_items, kwarg).to(device)
+            model = model_class(
+                n_users=n_users, n_items=n_items, **CONFIG[MODEL_ARCHITECTURE]
+            ).to(DEVICE)
+
         except KeyError:
             raise ValueError(
                 f"Model architecture '{MODEL_ARCHITECTURE}' not found in code."
@@ -337,8 +389,8 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
 
         optimizer = torch.optim.Adam(model.parameters())
 
-        # Every `step_size` (epoch) calls to scheduler.step(), multiply the learning rate
-        # by `gamma`
+        # Every `step_size` (epoch) calls to scheduler.step(), multiply the learning
+        # rate by `gamma`
         # By default, Adam has a learning rate of 0.001
         scheduler = torch.optim.lr_scheduler.StepLR(
             optimizer, step_size=STEP_SIZE, gamma=GAMMA
@@ -346,11 +398,11 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
 
         model, all_losses_list = train_model(
             train_loader,
-            device,
             model,
             loss_func,
             optimizer,
             scheduler,
+            device=DEVICE,
             epochs=EPOCHS,
             log_every=LOG_EVERY,
         )
@@ -361,12 +413,15 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
             plt.plot(all_losses_list)
             plt.show()
 
-        # ----------------------------------------------------------------------------------
-        # ------ Evaluation (Test set)
-        # ----------------------------------------------------------------------------------
+        print("Train Loss: {}\n".format(np.round(all_losses_list[-1], 4)))
 
-        print("")
-        user_pred_true = collect_user_predictions(model, test_loader, device)
+        # ------------------------------------------------------------------------------
+        # ------ Evaluation (Test set)
+        # ------------------------------------------------------------------------------
+        test_loss = evaluate_model(test_loader, model, loss_func, DEVICE)
+        print("Test Loss: {}\n".format(np.round(test_loss, 4)))
+
+        user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
 
         # Standard, accurate RMSE over all individual ratings
         rmse_score = rmse(user_pred_true)

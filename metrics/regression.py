@@ -12,8 +12,8 @@ from sklearn.metrics import root_mean_squared_error
 
 
 def collect_user_predictions(
+    loader: torch.utils.data.DataLoader,
     model: torch.nn.Module,
-    test_loader: torch.utils.data.DataLoader,
     device: torch.device,
     verbose: bool = False,
 ) -> Dict[int, List[Tuple[float, float]]]:
@@ -29,7 +29,7 @@ def collect_user_predictions(
     ----------
     model
         Trained PyTorch model that takes (users, items) and outputs predictions.
-    test_loader
+    loader
         DataLoader yielding test batches as dicts with "users", "items", "targets".
     device
         Device on which to run inference (e.g., torch.device("cuda") or torch.device("cpu")).
@@ -46,7 +46,7 @@ def collect_user_predictions(
     user_pred_true: DefaultDict[int, List[Tuple[float, float]]] = defaultdict(list)
 
     with torch.no_grad():
-        for batch in test_loader:
+        for batch in loader:
             users = batch["users"].to(device)
             items = batch["items"].to(device)
             targets = batch["targets"].to(device)

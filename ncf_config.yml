@@ -1,7 +1,7 @@
 # Global Settings (Static)
 system:
   random_seed: 42
-  device: "auto" # "cuda", "cpu", or "auto"
+  device: "cpu" # "cuda", "cpu", or "auto"
   save_dir: "./models"
 
 data:
@@ -26,8 +26,25 @@ tuning:
     weight_decay: 1.0e-5
 
 # Best Parameters (Manually updated after tuning)
+SimpleNCF:
+  epochs: 1
+  learning_rate: 0.001
+  batch_size: 4
+
+  layers: [64]
+
+  # embedding dimensions
+  emb_dim: 32
+
+  # Scheduler
+  step_size: 3
+  gamma: 0.7
+
+  # log
+  log_every: 2000
+
 DeepNCF:
-  epochs: 20
+  epochs: 1
   learning_rate: 0.0005
   batch_size: 124
 
@@ -36,9 +53,12 @@ DeepNCF:
 
   # weight_decay: 1.0e-5
 
-  # Scheduler Parameters (Added)
+  # embedding dimensions
+  emb_dim: 32
+
+  # Scheduler
   step_size: 3
   gamma: 0.7
 
-  # embeddings dimensions
-  emb_dim: 32
+  # log
+  log_every: 20
