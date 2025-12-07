@@ -5,14 +5,16 @@ from collections import OrderedDict
 
 
 class SimpleNCF(nn.Module):
-    def __init__(self, n_users: int, n_items: int, emb_dim: int = 32):
+
+    def __init__(self, n_users: int, n_items: int, **kwargs):
         """
         emb_dim = 32
 
         item and user embeddings get concatenated, resulting in an embedding with 64d.
         """
-
         super().__init__()
+
+        emb_dim = kwargs.get("emb_dim")
 
         # learnable parameters - user and item embedding matrices
         # user embedding matrix size = n_users x emb_dim
@@ -44,15 +46,16 @@ class DeepNCF(nn.Module):
     nn.Module - when we call the class, it automatically executes the forward function
     """
 
-    def __init__(
-        self, n_users: int, n_items: int, emb_dim: int = 32, dropout: float = 0.2
-    ):
+    def __init__(self, n_users: int, n_items: int, **kwargs):
         """
         (NCF original paper - MLP version)
         layers (#3): 64d - 32d - 16d
         (2 hidden layers + output layer / last hidden layer)
         """
         super().__init__()
+
+        emb_dim = kwargs.get("emb_dim")
+        dropout = kwargs.get("dropout")
 
         self.user_embedding = nn.Embedding(n_users, emb_dim)
         self.item_embedding = nn.Embedding(n_items, emb_dim)

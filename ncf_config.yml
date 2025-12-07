@@ -1,0 +1,44 @@
+# Global Settings (Static)
+system:
+  random_seed: 42
+  device: "auto" # "cuda", "cpu", or "auto"
+  save_dir: "./models"
+
+data:
+  path: "datasets/ml-latest-small/ratings.csv"
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+
+# Tuning Grid (For Hyperparameter Search)
+tuning:
+  epochs_per_trial: 3
+  grid:
+    learning_rate: [1.0e-3, 5.0e-4, 1.0e-4]
+    batch_size: [128, 256, 512]
+    dropout: [0.0, 0.2, 0.5]
+    layers:
+      - [64, 32, 16] # Architecture A
+      - [128, 64, 32] # Architecture B
+  fixed:
+    step_size: 3
+    gamma: 0.7
+    weight_decay: 1.0e-5
+
+# Best Parameters (Manually updated after tuning)
+DeepNCF:
+  epochs: 20
+  learning_rate: 0.0005
+  batch_size: 124
+
+  dropout: 0.2
+  layers: [64, 32, 16]
+
+  # weight_decay: 1.0e-5
+
+  # Scheduler Parameters (Added)
+  step_size: 3
+  gamma: 0.7
+
+  # embeddings dimensions
+  emb_dim: 32

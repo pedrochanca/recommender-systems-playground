@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import argparse
+import yaml
 
 from torch.utils.data import Dataset, DataLoader
 import torch
@@ -13,6 +14,11 @@ import matplotlib.pyplot as plt
 
 from models.ncf import SimpleNCF, DeepNCF
 from metrics.regression import collect_user_predictions, rmse, precision_recall_at_k
+
+
+def load_config(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
 
 
 class ExplicitDataset(Dataset):
@@ -36,7 +42,7 @@ class ExplicitDataset(Dataset):
         }
 
 
-def prep_datasets(df: pd.DataFrame, verbose: bool = False):
+def preprocess_dataframe(df: pd.DataFrame):
 
     # encode the user and item id to start from 0 (this is what nn.Embedding expects)
     # this prevents us from run into index out of bound "error" with Embedding lookup
@@ -46,24 +52,58 @@ def prep_datasets(df: pd.DataFrame, verbose: bool = False):
     df.user_id = lbl_user.fit_transform(df.user_id.values)
     df.item_id = lbl_item.fit_transform(df.item_id.values)
 
-    df_train, df_test = model_selection.train_test_split(
-        df, test_size=0.1, random_state=42, stratify=df.rating.values
+    n_users = len(lbl_user.classes_)
+    n_items = len(lbl_item.classes_)
+
+    return df, n_users, n_items
+
+
+def prep_datasets(
+    df: pd.DataFrame,
+    val_split: float,
+    test_split: float,
+    use_validation: bool,
+    random_seed: int = 42,
+    verbose: bool = False,
+):
+
+    df_train_val, df_test = model_selection.train_test_split(
+        df, test_size=test_split, random_state=random_seed, stratify=df["rating"].values
     )
 
+    if use_validation:
+        # Adjust val ratio relative to the remaining data
+        relative_val_size = val_split / (1 - test_split)
+
+        df_train, df_val = model_selection.train_test_split(
+            df_train_val,
+            test_size=relative_val_size,
+            random_state=random_seed,
+            stratify=df_train_val["rating"].values,
+        )
+
+        val_dataset = ExplicitDataset(
+            users=df_val["user_id"].values,
+            items=df_val["item_id"].values,
+            targets=df_val["rating"].values,
+        )
+    else:
+        # Keep all remaining data as training
+        df_train = df_train_val
+
+        val_dataset = None
+
     train_dataset = ExplicitDataset(
-        users=df_train.user_id.values,
-        items=df_train.item_id.values,
-        targets=df_train.rating.values,
+        users=df_train["user_id"].values,
+        items=df_train["item_id"].values,
+        targets=df_train["rating"].values,
     )
 
     test_dataset = ExplicitDataset(
-        users=df_test.user_id.values,
-        items=df_test.item_id.values,
-        targets=df_test.rating.values,
+        users=df_test["user_id"].values,
+        items=df_test["item_id"].values,
+        targets=df_test["rating"].values,
     )
-
-    n_users = len(lbl_user.classes_)
-    n_items = len(lbl_item.classes_)
 
     if verbose:
         print(
@@ -75,7 +115,7 @@ def prep_datasets(df: pd.DataFrame, verbose: bool = False):
             ),
         )
 
-    return train_dataset, test_dataset, n_users, n_items
+    return train_dataset, val_dataset, test_dataset
 
 
 def prep_batch(
@@ -112,7 +152,14 @@ def prep_batch(
 
 
 def train_model(
-    train_loader, device, model, loss_func, optimizer, scheduler, epochs: int = 1
+    train_loader,
+    device,
+    model,
+    loss_func,
+    optimizer,
+    scheduler,
+    epochs: int = 1,
+    log_every: int = 1000,
 ):
     """
     epochs: # nb. of times we go through the train set
@@ -140,9 +187,6 @@ def train_model(
     total_loss = 0
     total_samples = 0
     all_losses_list = []
-
-    # log loss every X batches
-    log_every = 1000
 
     for epoch_i in range(epochs):
         for i, train_data in enumerate(train_loader):
@@ -193,15 +237,44 @@ def train_model(
     return model, all_losses_list
 
 
-def main(MODEL_ARCHITECTURE, PLOT, VERBOSE):
+"""
+
+train / test - 0.9 / 0.1
+
+train / val / test - 0.8 / 0.1 / 0.1
+- train / val - 0.8 / 0.1
+- train + val / test - 0.9 / 0.1
+
+"""
+
+
+def run_tuning():
+
+    return None
+
+
+def run_evaluation():
+
+    return None
+
+
+def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
 
     # ----------------------------------------------------------------------------------
     # ------ Parameters
     # ----------------------------------------------------------------------------------
 
+    RANDOM_SEED = CONFIG["system"]["random_seed"]
+
+    TRAIN_SPLIT = CONFIG["data"]["train_split"]
+    VAL_SPLIT = CONFIG["data"]["val_split"]
+    TEST_SPLIT = CONFIG["data"]["test_split"]
+
     STEP_SIZE = 3
     GAMMA = 0.7
     EPOCHS = 1
+
+    LOG_EVERY = 20
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -215,73 +288,106 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE):
         inplace=True,
     )
 
-    train_set, test_set, n_users, n_items = prep_datasets(df, verbose=VERBOSE)
-    train_loader, test_loader = prep_batch(train_set, test_set, verbose=VERBOSE)
+    df, n_users, n_items = preprocess_dataframe(df)
 
-    # ----------------------------------------------------------------------------------
-    # ------ Model Dynamic Instantiation
-    # ----------------------------------------------------------------------------------
-
-    print(f"Initializing {MODEL_ARCHITECTURE}...")
-    try:
-        # Get the class by name from global scope
-        model_class = globals()[MODEL_ARCHITECTURE]
-        model = model_class(n_users=n_users, n_items=n_items).to(device)
-    except KeyError:
-        raise ValueError(
-            f"Model architecture '{MODEL_ARCHITECTURE}' not found in code."
-        )
-
-    # ----------------------------------------------------------------------------------
-    # ------ Train
-    # ----------------------------------------------------------------------------------
-
-    loss_func = nn.MSELoss(reduction="none")
-
-    optimizer = torch.optim.Adam(model.parameters())
-
-    # Every `step_size` calls to scheduler.step(), multiply the learning rate by `gamma`
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer, step_size=STEP_SIZE, gamma=GAMMA
+    train_set, val_set, test_set = prep_datasets(
+        df,
+        val_split=VAL_SPLIT,
+        test_split=TEST_SPLIT,
+        use_validation=TUNE,
+        random_seed=RANDOM_SEED,
+        verbose=VERBOSE,
     )
 
-    model, all_losses_list = train_model(
-        train_loader, device, model, loss_func, optimizer, scheduler, epochs=EPOCHS
-    )
-
-    # Plot Loss
-    if PLOT:
-        plt.figure()
-        plt.plot(all_losses_list)
-        plt.show()
-
     # ----------------------------------------------------------------------------------
-    # ------ Evaluation (Test set)
+    # ------ Tune OR evaluate
     # ----------------------------------------------------------------------------------
 
-    print("")
-    user_pred_true = collect_user_predictions(model, test_loader, device)
-
-    # Standard, accurate RMSE over all individual ratings
-    rmse_score = rmse(user_pred_true)
-    print("RMSE: {}\n".format(np.round(rmse_score, 4)))
-
-    K = [1, 3, 5, 10, 20, 50, 100]
-    THRESHOLD = 3.5
-
-    for k in K:
-
-        precisions, recalls = precision_recall_at_k(
-            user_pred_true, k=k, threshold=THRESHOLD
+    if TUNE:
+        train_loader, test_loader = prep_batch(
+            train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
         )
 
-        total_precision = sum(precision for precision in precisions.values()) / len(
-            precisions
-        )
-        total_recall = sum(recall for recall in recalls.values()) / len(recalls)
+    else:
+        BATCH_SIZE = CONFIG[MODEL_ARCHITECTURE]["batch_size"]
 
-        print("Precision @ {}: {}".format(k, np.round(total_precision, 4)))
-        print("Recall @ {}: {} \n".format(k, np.round(total_recall, 4)))
+        train_loader, test_loader = prep_batch(
+            train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
+        )
+
+        # ------------------------------------------------------------------------------
+        # ------ Model Dynamic Instantiation
+        # ------------------------------------------------------------------------------
+
+        print(f"Initializing {MODEL_ARCHITECTURE}...")
+        try:
+            # Get the class by name from global scope
+            model_class = globals()[MODEL_ARCHITECTURE]
+            model = model_class(n_users=n_users, n_items=n_items).to(device)
+        except KeyError:
+            raise ValueError(
+                f"Model architecture '{MODEL_ARCHITECTURE}' not found in code."
+            )
+
+        # ------------------------------------------------------------------------------
+        # ------ Train
+        # ------------------------------------------------------------------------------
+
+        loss_func = nn.MSELoss(reduction="none")
+
+        optimizer = torch.optim.Adam(model.parameters())
+
+        # Every `step_size` (epoch) calls to scheduler.step(), multiply the learning rate
+        # by `gamma`
+        # By default, Adam has a learning rate of 0.001
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=STEP_SIZE, gamma=GAMMA
+        )
+
+        model, all_losses_list = train_model(
+            train_loader,
+            device,
+            model,
+            loss_func,
+            optimizer,
+            scheduler,
+            epochs=EPOCHS,
+            log_every=LOG_EVERY,
+        )
+
+        # Plot Loss
+        if PLOT:
+            plt.figure()
+            plt.plot(all_losses_list)
+            plt.show()
+
+        # ----------------------------------------------------------------------------------
+        # ------ Evaluation (Test set)
+        # ----------------------------------------------------------------------------------
+
+        print("")
+        user_pred_true = collect_user_predictions(model, test_loader, device)
+
+        # Standard, accurate RMSE over all individual ratings
+        rmse_score = rmse(user_pred_true)
+        print("RMSE: {}\n".format(np.round(rmse_score, 4)))
+
+        K = [1, 3, 5, 10, 20, 50, 100]
+        THRESHOLD = 3.5
+
+        for k in K:
+
+            precisions, recalls = precision_recall_at_k(
+                user_pred_true, k=k, threshold=THRESHOLD
+            )
+
+            total_precision = sum(precision for precision in precisions.values()) / len(
+                precisions
+            )
+            total_recall = sum(recall for recall in recalls.values()) / len(recalls)
+
+            print("Precision @ {}: {}".format(k, np.round(total_precision, 4)))
+            print("Recall @ {}: {} \n".format(k, np.round(total_recall, 4)))
 
 
 if __name__ == "__main__":
@@ -297,6 +403,9 @@ if __name__ == "__main__":
         help="Model architecture to use: SimpleNCF or DeepNCF",
     )
     parser.add_argument(
+        "--config", type=str, default="ncf_config.yml", help="Path to config file"
+    )
+    parser.add_argument(
         "--plot",
         action="store_true",  # Sets value to True if argument is present
         help="Enable plotting",
@@ -306,6 +415,17 @@ if __name__ == "__main__":
         action="store_true",  # Sets value to True if argument is present
         help="Enable verbose",
     )
+    parser.add_argument(
+        "--tune",
+        action="store_true",  # Sets value to True if argument is present
+        help="Run hyperparameter tuning",
+    )
     args = parser.parse_args()
 
-    main(MODEL_ARCHITECTURE=args.model, PLOT=args.plot, VERBOSE=args.verbose)
+    main(
+        MODEL_ARCHITECTURE=args.model,
+        PLOT=args.plot,
+        VERBOSE=args.verbose,
+        TUNE=args.tune,
+        CONFIG=load_config(args.config),
+    )
