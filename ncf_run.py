@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import argparse
 import yaml
+import itertools
 
 from torch.utils.data import Dataset, DataLoader
 import torch
@@ -75,23 +76,21 @@ def prep_datasets(
         # Adjust val ratio relative to the remaining data
         relative_val_size = val_split / (1 - test_split)
 
-        df_train, df_val = model_selection.train_test_split(
+        df_train, df_test = model_selection.train_test_split(
             df_train_val,
             test_size=relative_val_size,
             random_state=random_seed,
             stratify=df_train_val["rating"].values,
         )
 
-        val_dataset = ExplicitDataset(
-            users=df_val["user_id"].values,
-            items=df_val["item_id"].values,
-            targets=df_val["rating"].values,
+        test_dataset = ExplicitDataset(
+            users=df_test["user_id"].values,
+            items=df_test["item_id"].values,
+            targets=df_test["rating"].values,
         )
     else:
         # Keep all remaining data as training
         df_train = df_train_val
-
-        val_dataset = None
 
     train_dataset = ExplicitDataset(
         users=df_train["user_id"].values,
@@ -115,7 +114,7 @@ def prep_datasets(
             ),
         )
 
-    return train_dataset, val_dataset, test_dataset
+    return train_dataset, test_dataset
 
 
 def prep_batch(
@@ -270,28 +269,17 @@ train / val / test - 0.8 / 0.1 / 0.1
 """
 
 
-import itertools
+def param_comb(config, is_tune: bool):
 
+    if is_tune:
 
-def run_tuning(tuning_config):
-    grid = tuning_config["grid"]
-    fixed = tuning_config["fixed"]
+        keys, values = zip(*config.items())
+        combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
-    # Generate all combinations from the grid
-    keys, values = zip(*grid.items())
-    combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+    else:
+        combinations = [config]
 
-    for trial_params in combinations:
-        # 2. MERGE: Combine fixed settings with current trial settings
-        # This ensures 'step_size' and 'gamma' are available
-        current_args = {**fixed, **trial_params}
-
-        print(f"Testing: {current_args}")
-
-
-def run_evaluation():
-
-    return None
+    return combinations
 
 
 def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
@@ -307,12 +295,6 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
     VAL_SPLIT = CONFIG["data"]["val_split"]
     TEST_SPLIT = CONFIG["data"]["test_split"]
 
-    STEP_SIZE = 3
-    GAMMA = 0.7
-    EPOCHS = 1
-
-    LOG_EVERY = 20
-
     # ----------------------------------------------------------------------------------
     # ------ Data / batch setup
     # ----------------------------------------------------------------------------------
@@ -325,7 +307,7 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
 
     df, n_users, n_items = preprocess_dataframe(df)
 
-    train_set, val_set, test_set = prep_datasets(
+    train_set, test_set = prep_datasets(
         df,
         val_split=VAL_SPLIT,
         test_split=TEST_SPLIT,
@@ -339,22 +321,32 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
     # ----------------------------------------------------------------------------------
 
     if TUNE:
-        # train_loader, test_loader = prep_batch(
-        #     train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
-        # )
-
-        run_tuning(CONFIG["tuning"])
-
+        model_config = CONFIG[MODEL_ARCHITECTURE]["tuning"]
     else:
+        model_config = CONFIG[MODEL_ARCHITECTURE]["optim_params"]
+
+    param_combinations = param_comb(config=model_config, is_tune=TUNE)
+
+    for params in param_combinations:
+        # MERGE: Combine fixed settings with current trial settings
+        # This ensures 'step_size' and 'gamma' are available
+        current_args = {**params}
+
+        print(f"Testing: {current_args}")
+
         # ------------------------------------------------------------------------------
         # ------ Model Related Parameters
         # ------------------------------------------------------------------------------\
 
-        BATCH_SIZE = CONFIG[MODEL_ARCHITECTURE]["batch_size"]
-        EPOCHS = CONFIG[MODEL_ARCHITECTURE]["epochs"]
-        LOG_EVERY = CONFIG[MODEL_ARCHITECTURE]["log_every"]
-        STEP_SIZE = CONFIG[MODEL_ARCHITECTURE]["step_size"]
-        GAMMA = CONFIG[MODEL_ARCHITECTURE]["gamma"]
+        BATCH_SIZE = current_args["batch_size"]
+        EPOCHS = current_args["epochs"]
+        LOG_EVERY = current_args["log_every"]
+        STEP_SIZE = current_args["step_size"]
+        GAMMA = current_args["gamma"]
+
+        train_loader, test_loader = prep_batch(
+            train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
+        )
 
         # ------------------------------------------------------------------------------
         # ------ Batch Preparation
@@ -372,9 +364,9 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
         try:
             # Get the class by name from global scope
             model_class = globals()[MODEL_ARCHITECTURE]
-            model = model_class(
-                n_users=n_users, n_items=n_items, **CONFIG[MODEL_ARCHITECTURE]
-            ).to(DEVICE)
+            model = model_class(n_users=n_users, n_items=n_items, **current_args).to(
+                DEVICE
+            )
 
         except KeyError:
             raise ValueError(
@@ -421,28 +413,30 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
         test_loss = evaluate_model(test_loader, model, loss_func, DEVICE)
         print("Test Loss: {}\n".format(np.round(test_loss, 4)))
 
-        user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
+        if not TUNE:
 
-        # Standard, accurate RMSE over all individual ratings
-        rmse_score = rmse(user_pred_true)
-        print("RMSE: {}\n".format(np.round(rmse_score, 4)))
+            user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
 
-        K = [1, 3, 5, 10, 20, 50, 100]
-        THRESHOLD = 3.5
+            # Standard, accurate RMSE over all individual ratings
+            rmse_score = rmse(user_pred_true)
+            print("RMSE: {}\n".format(np.round(rmse_score, 4)))
 
-        for k in K:
+            K = [1, 3, 5, 10, 20, 50, 100]
+            THRESHOLD = 3.5
 
-            precisions, recalls = precision_recall_at_k(
-                user_pred_true, k=k, threshold=THRESHOLD
-            )
+            for k in K:
 
-            total_precision = sum(precision for precision in precisions.values()) / len(
-                precisions
-            )
-            total_recall = sum(recall for recall in recalls.values()) / len(recalls)
+                precisions, recalls = precision_recall_at_k(
+                    user_pred_true, k=k, threshold=THRESHOLD
+                )
 
-            print("Precision @ {}: {}".format(k, np.round(total_precision, 4)))
-            print("Recall @ {}: {} \n".format(k, np.round(total_recall, 4)))
+                total_precision = sum(
+                    precision for precision in precisions.values()
+                ) / len(precisions)
+                total_recall = sum(recall for recall in recalls.values()) / len(recalls)
+
+                print("Precision @ {}: {}".format(k, np.round(total_precision, 4)))
+                print("Recall @ {}: {} \n".format(k, np.round(total_recall, 4)))
 
 
 if __name__ == "__main__":
