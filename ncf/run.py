@@ -403,8 +403,8 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
             user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
 
             # Standard, accurate RMSE over all individual ratings
-            # rmse_score = rmse(user_pred_true)
-            # print("RMSE: {}\n".format(np.round(rmse_score, 4)))
+            metrics = compute_metrics(user_pred_true=user_pred_true, metrics=["rmse"])
+            print("RMSE: {}\n".format(np.round(metrics["rmse"], 4)))
 
             K = [1, 3, 5, 10, 20, 50, 100]
             THRESHOLD = 3.5
@@ -430,8 +430,6 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
 
                 print("Hit Rate @ {}: {}".format(k, np.round(metrics["hit_rate"], 4)))
                 print("nDCG @ {}: {} \n".format(k, np.round(metrics["ndcg"], 4)))
-
-                print("RMSE {}: {} \n".format(k, np.round(metrics["rmse"], 4)))
 
 
 if __name__ == "__main__":
