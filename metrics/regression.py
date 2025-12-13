@@ -1,9 +1,9 @@
 from typing import DefaultDict, Dict, List, Tuple
 from collections import defaultdict
 
-import torch
+import math
 
-from sklearn.metrics import root_mean_squared_error
+import torch
 
 
 # --------------------------------------------------------------------------------------
@@ -68,123 +68,6 @@ def collect_user_predictions(
 
 
 # --------------------------------------------------------------------------------------
-# ----- Metrics
-# --------------------------------------------------------------------------------------
-
-
-def rmse(
-    user_pred_true: Dict[int, List[Tuple[float, float]]],
-    verbose: bool = False,
-) -> float:
-    """
-    Compute RMSE on a test set using the output of collect_user_predictions.
-
-    This calculates the global RMSE (equivalent to 'per_sample' mode).
-
-    Parameters
-    ----------
-    user_pred_true
-        A dictionary mapping each user_id (int) to a list of (predicted_value,
-        true_value) tuples.
-    verbose
-        If True, prints predictions and targets during collection.
-
-    Returns
-    -------
-    score
-        The computed root mean squared error.
-    """
-    pred_list = []
-    true_list = []
-
-    # Flatten the dictionary to get global lists of predictions and targets
-    for user_id, interactions in user_pred_true.items():
-        for pred, true in interactions:
-            pred_list.append(pred)
-            true_list.append(true)
-
-            if verbose:
-                print("user_id: {}; pred: {}; true: {}".format(user_id, pred, true))
-
-    score = root_mean_squared_error(true_list, pred_list)
-
-    return score
-
-
-def precision_recall_at_k(
-    user_pred_true: Dict[int, List[Tuple[float, float]]],
-    k: int = 10,
-    threshold: float = 3.5,
-    verbose: bool = False,
-) -> Tuple[Dict[int, float], Dict[int, float]]:
-    """
-    Compute per-user Precision@K and Recall@K from predicted and true targets.
-
-    The `user_pred_true` mapping is expected to store, for each user, a list of
-    (predicted_value, true_value) tuples. Predicted values are used to rank items,
-    and both predicted and true values are compared to a relevance threshold.
-
-    Parameters
-    ----------
-    user_pred_true
-        A dictionary mapping each user_id (int) to a list of (predicted_value, true_value)
-        tuples.
-    k
-        The cutoff rank K for Precision@K and Recall@K.
-    threshold
-        Relevance threshold. Predicted/true values greater than or equal to this are
-        considered relevant.
-    verbose
-        If True, prints per-user counts used in the metric computations.
-
-    Returns
-    -------
-    precisions
-        A dictionary mapping each user_id (int) to its Precision@K.
-    recalls
-        A dictionary mapping each user_id (int) to its Recall@K.
-    """
-    precisions: Dict[int, float] = {}
-    recalls: Dict[int, float] = {}
-
-    for user_id, user_targets in user_pred_true.items():
-        # Sort user targets by predicted value (descending)
-        sorted_targets = sorted(user_targets, key=lambda x: x[0], reverse=True)
-
-        # Number of actually relevant items
-        n_rel = sum(true_r >= threshold for (_, true_r) in sorted_targets)
-
-        # Number of recommended items that are predicted relevant within top-K
-        top_k = sorted_targets[:k]
-        n_rec_k = sum(pred_r >= threshold for (pred_r, _) in top_k)
-
-        # Number of recommended items that are predicted relevant AND actually relevant
-        # within top-K
-        n_rec_rel_k = sum(
-            (pred_r >= threshold) and (true_r >= threshold)
-            for (pred_r, true_r) in top_k
-        )
-
-        if verbose:
-            print(
-                "user_id: {}; n_rel: {}; n_rec_k: {}; n_rec_rel_k: {}".format(
-                    user_id, n_rel, n_rec_k, n_rec_rel_k
-                )
-            )
-
-        # Precision@K: Proportion of recommended items that are relevant.
-        precisions[user_id] = n_rec_rel_k / n_rec_k if n_rec_k != 0 else 0.0
-
-        # Recall@K: Proportion of relevant items that are recommended.
-        recalls[user_id] = n_rec_rel_k / n_rel if n_rel != 0 else 0.0
-
-    return precisions, recalls
-
-
-from typing import Dict, List, Tuple
-import math
-
-# --------------------------------------------------------------------------------------
 # ----- Metric Logic (Micro-Kernels)
 # --------------------------------------------------------------------------------------
 
@@ -202,7 +85,10 @@ def _calc_squared_error(user_targets: List[Tuple[float, float]]) -> Tuple[float,
 
 
 def _calc_precision(top_k: List[Tuple[float, float]], threshold: float) -> float:
-    """Calculates Precision@K given the top K items."""
+    """
+    Calculates Precision@K given the top K items.
+    """
+
     if not top_k:
         return 0.0
 
@@ -213,7 +99,10 @@ def _calc_precision(top_k: List[Tuple[float, float]], threshold: float) -> float
 def _calc_recall(
     top_k: List[Tuple[float, float]], n_rel_total: int, threshold: float
 ) -> float:
-    """Calculates Recall@K given top K items and total relevant count."""
+    """
+    Calculates Recall@K given top K items and total relevant count.
+    """
+
     if n_rel_total == 0:
         return 0.0
 
@@ -222,7 +111,10 @@ def _calc_recall(
 
 
 def _calc_hit_rate(top_k: List[Tuple[float, float]], threshold: float) -> float:
-    """Calculates HitRate@K (1.0 if any relevant item is in top K, else 0.0)."""
+    """
+    Calculates HitRate@K (1.0 if any relevant item is in top K, else 0.0).
+    """
+
     is_hit = any(true_r >= threshold for (_, true_r) in top_k)
     return 1.0 if is_hit else 0.0
 
@@ -230,7 +122,10 @@ def _calc_hit_rate(top_k: List[Tuple[float, float]], threshold: float) -> float:
 def _calc_ndcg(
     top_k: List[Tuple[float, float]], n_rel_total: int, k: int, threshold: float
 ) -> float:
-    """Calculates NDCG@K using binary relevance."""
+    """
+    Calculates NDCG@K using binary relevance.
+    """
+
     dcg = 0.0
 
     # 1. Calculate DCG (based on predicted rank in top_k)
@@ -270,7 +165,8 @@ def compute_metrics(
     user_pred_true
         Dictionary {user_id: [(pred_rating, true_rating), ...]}.
     metrics
-        List of metrics to compute. Options: ["precision", "recall", "hit_rate", "ndcg", "rmse"].
+        List of metrics to compute.
+        Options: ["precision", "recall", "hit_rate", "ndcg", "rmse"].
     k
         The rank cutoff.
     threshold
@@ -281,6 +177,7 @@ def compute_metrics(
     results
         Dictionary containing average score for each requested metric.
     """
+
     # Defaults
     if metrics is None:
         metrics = ["precision", "recall", "hit_rate", "ndcg", "rmse"]
@@ -303,7 +200,7 @@ def compute_metrics(
         return {m: 0.0 for m in metrics}
 
     # Optimization: Iterate users once
-    for user_id, user_targets in user_pred_true.items():
+    for _, user_targets in user_pred_true.items():
 
         # --- RMSE Calculation (Uses ALL items, no sorting needed) ---
         if "rmse" in metrics:
@@ -315,10 +212,10 @@ def compute_metrics(
         # Only sort if we actually need ranking metrics
         if len(ranking_sums) > 0:
 
-            # 1. HEAVY LIFTING: Sort once per user
+            # Sort once per user
             sorted_targets = sorted(user_targets, key=lambda x: x[0], reverse=True)
 
-            # 2. Prepare common data structures
+            # Prepare common data structures
             top_k = sorted_targets[:k]
 
             # We only need total relevant count if recall or ndcg is requested

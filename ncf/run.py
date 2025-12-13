@@ -400,36 +400,39 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
 
         if not TUNE:
 
-            user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
-
-            # Standard, accurate RMSE over all individual ratings
-            metrics = compute_metrics(user_pred_true=user_pred_true, metrics=["rmse"])
-            print("RMSE: {}\n".format(np.round(metrics["rmse"], 4)))
-
             K = [1, 3, 5, 10, 20, 50, 100]
+            metrics_to_compute = ["precision", "recall", "hit_rate", "ndcg", "rmse"]
             THRESHOLD = 3.5
+
+            user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
 
             for k in K:
 
+                if "rmse" in metrics_to_compute and k != K[0]:
+                    metrics_to_compute.remove("rmse")
+
+                print(metrics_to_compute)
+
                 metrics = compute_metrics(
                     user_pred_true=user_pred_true,
-                    metrics=["precision", "recall", "hit_rate", "ndcg", "rmse"],
+                    metrics=metrics_to_compute,
                     k=k,
                     threshold=THRESHOLD,
                 )
 
-                # total_precision = sum(
-                #     precision for precision in metrics["precision"].values()
-                # ) / len(metrics["precision"])
-                # total_recall = sum(
-                #     recall for recall in metrics["recall"].values()
-                # ) / len(metrics["recall"])
-
-                print("Precision @ {}: {}".format(k, np.round(metrics["precision"], 4)))
-                print("Recall @ {}: {} \n".format(k, np.round(metrics["recall"], 4)))
-
-                print("Hit Rate @ {}: {}".format(k, np.round(metrics["hit_rate"], 4)))
-                print("nDCG @ {}: {} \n".format(k, np.round(metrics["ndcg"], 4)))
+                for metric in metrics_to_compute:
+                    if metric != "rmse":
+                        print(
+                            "{} @ {}: {}\n".format(
+                                metric.upper(), k, np.round(metrics[metric], 4)
+                            )
+                        )
+                    else:
+                        print(
+                            "{}: {}\n".format(
+                                metric.upper(), np.round(metrics[metric], 4)
+                            )
+                        )
 
 
 if __name__ == "__main__":
