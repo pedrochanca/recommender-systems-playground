@@ -16,3 +16,5 @@ __pycache__/
 .rendered
 .venv
 .python-version
+*.dat
+*.csv
