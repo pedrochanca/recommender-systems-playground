@@ -29,7 +29,7 @@ SimpleNCF:
 
     # log / evaluation
     log_every: [20]
-    threshold: [3.5]
+    threshold: [0.5]
 
   optim_params:
     epochs: 1
@@ -48,7 +48,7 @@ SimpleNCF:
 
     # log / evaluation
     log_every: 2000
-    threshold: 3.5
+    threshold: 0.5
 
 DeepNCF:
   tuning:
@@ -70,7 +70,7 @@ DeepNCF:
 
     # log / evaluation
     log_every: [60]
-    threshold: [3.5]
+    threshold: [0.5]
 
   optim_params:
     epochs: 1
@@ -89,4 +89,4 @@ DeepNCF:
 
     # log / evaluation
     log_every: 20
-    threshold: 3.5
+    threshold: 0.5
