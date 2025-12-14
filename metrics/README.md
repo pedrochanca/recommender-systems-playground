@@ -97,10 +97,12 @@ NDCG@K = \frac{DCG@K}{IDCG@K}
 $$
 
 **DCG (Discounted Cumulative Gain)**:
+
 $$
 DCG@K = \sum_{i=1}^{K} \frac{rel_i}{\log_2(i + 1)}
 $$
-*Where $rel_i$ is 1 if relevant, 0 otherwise. The term $\log_2(i+1)$ (or standard $i+2$ indexing) acts as a penalty discount that grows larger as rank decreases.*
+
+*Where* $rel_i$ *is 1 if relevant, 0 otherwise. The term* $\log_2(i+1)$ *(or standard* $i+2$ *indexing) acts as a penalty discount that grows larger as rank decreases.*
 
 **IDCG (Ideal DCG)**:
 The DCG score of a hypothetical "Perfect Ordering" where all relevant items are placed at the very top of the list.
