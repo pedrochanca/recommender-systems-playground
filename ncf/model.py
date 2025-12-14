@@ -8,32 +8,32 @@ class SimpleNCF(nn.Module):
 
     def __init__(self, n_users: int, n_items: int, **kwargs):
         """
-        emb_dim = 32
+        emb_dim = X//2
 
-        item and user embeddings get concatenated, resulting in an embedding with 64d.
+        item and user embeddings get concatenated, resulting in an embedding with Xd.
         """
         super().__init__()
 
-        emb_dim = kwargs.get("emb_dim")
+        layers = kwargs.get("layers")
 
         # learnable parameters - user and item embedding matrices
-        # user embedding matrix size = n_users x emb_dim
-        # item embedding matrix size = n_items x emb_dim
-        self.user_embedding = nn.Embedding(n_users, emb_dim)
-        self.item_embedding = nn.Embedding(n_items, emb_dim)
+        # user embedding matrix size = n_users x layers[0] // 2
+        # item embedding matrix size = n_items x layers[0] // 2
+        self.user_embedding = nn.Embedding(n_users, layers[0] // 2)
+        self.item_embedding = nn.Embedding(n_items, layers[0] // 2)
 
-        # single linear layer: 64 -> 1
-        self.fc = nn.Linear(2 * emb_dim, 1)
+        # single linear layer
+        self.fc = nn.Linear(layers[0], 1)
 
     def forward(self, user_ids: torch.Tensor, item_ids: torch.Tensor) -> torch.Tensor:
         """
         Zero hidden layers.
 
-        All it does: for the 64d concatenated embedding, it outputs a single value that
+        All it does: for the Xd concatenated embedding, it outputs a single value that
         passes through a linear layer.
         """
-        u_emb = self.user_embedding(user_ids)  # size: [batch, 32]
-        i_emb = self.item_embedding(item_ids)  # size: [batch, 32]
+        u_emb = self.user_embedding(user_ids)
+        i_emb = self.item_embedding(item_ids)
 
         x = torch.cat([u_emb, i_emb], dim=1)
         output = self.fc(x)
@@ -54,12 +54,11 @@ class DeepNCF(nn.Module):
         """
         super().__init__()
 
-        emb_dim = kwargs.get("emb_dim")
         dropout = kwargs.get("dropout")
         layers = kwargs.get("layers")
 
-        self.user_embedding = nn.Embedding(n_users, emb_dim)
-        self.item_embedding = nn.Embedding(n_items, emb_dim)
+        self.user_embedding = nn.Embedding(n_users, layers[0] // 2)
+        self.item_embedding = nn.Embedding(n_items, layers[0] // 2)
 
         self.fc = nn.Sequential(
             OrderedDict(
@@ -83,10 +82,10 @@ class DeepNCF(nn.Module):
         u_emb = self.user_embedding(user_ids)
         i_emb = self.item_embedding(item_ids)
 
-        # Concat (Default Size 64)
+        # concat
         x = torch.cat([u_emb, i_emb], dim=1)
 
-        # Pass through the tower
+        # pass through the tower
         output = self.fc(x)
 
         return output

@@ -15,6 +15,9 @@ SimpleNCF:
     learning_rate: [1.0e-3, 5.0e-4, 1.0e-4]
     batch_size: [128, 256, 512]
 
+    layers:
+      - [64]
+
     # scheduler
     step_size: [3]
     gamma: [0.7]
@@ -30,6 +33,8 @@ SimpleNCF:
     epochs: 1
     learning_rate: 0.001
     batch_size: 4
+
+    layer: 64
 
     # scheduler
     step_size: 3
@@ -55,15 +60,12 @@ DeepNCF:
 
     # weight_decay: [1.0e-5]
 
-    # embedding dimensions
-    emb_dim: [32]
-
     # scheduler
     step_size: [3]
     gamma: [0.7]
 
     # log / evaluation
-    log_every: [20]
+    log_every: [60]
     threshold: [3.5]
 
   optim_params:
@@ -75,9 +77,6 @@ DeepNCF:
     layers: [64, 32, 16]
 
     # weight_decay: 1.0e-5
-
-    # embedding dimensions
-    emb_dim: 32
 
     # scheduler
     step_size: 3

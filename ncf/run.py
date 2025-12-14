@@ -330,6 +330,7 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
         LOG_EVERY = params["log_every"]
         STEP_SIZE = params["step_size"]
         GAMMA = params["gamma"]
+        THRESHOLD = params["threshold"]
 
         train_loader, test_loader = prep_batch(
             train_set, test_set, batch_size=BATCH_SIZE, verbose=VERBOSE
@@ -402,7 +403,6 @@ def main(MODEL_ARCHITECTURE, PLOT, VERBOSE, TUNE, CONFIG):
 
             K = [1, 3, 5, 10, 20, 50, 100]
             metrics_to_compute = ["precision", "recall", "hit_rate", "ndcg", "rmse"]
-            THRESHOLD = 3.5
 
             user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
 

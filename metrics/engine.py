@@ -38,15 +38,16 @@ def collect_user_predictions(
     loader
         DataLoader yielding test batches as dicts with "users", "items", "targets".
     device
-        Device on which to run inference (e.g., torch.device("cuda") or torch.device("cpu")).
+        Device on which to run inference (e.g., torch.device("cuda") or
+        torch.device("cpu")).
     verbose
         If True, prints predictions and targets per batch.
 
     Returns
     -------
     user_pred_true
-        A dictionary mapping each user_id (int) to a list of (predicted_value, true_value)
-        tuples.
+        A dictionary mapping each user_id (int) to a list of (predicted_value,
+        true_value) tuples.
     """
     model.eval()
     user_pred_true: DefaultDict[int, List[Tuple[float, float]]] = defaultdict(list)
