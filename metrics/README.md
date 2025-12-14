@@ -31,6 +31,7 @@ Ranking metrics are computed on the **Top-K** items predicted by the model for e
 
 #### RMSE (Root Mean Squared Error)
 **Type**: Regression / Accuracy
+
 **Goal**: Measures how close the predicted ratings are to the true ratings.
 
 $$
@@ -61,6 +62,7 @@ $$
 
 #### Recall@K
 **Type**: Ranking
+
 **Goal**: Measures how many relevant items the model found, compared to how many exist in total for that user.
 
 $$
@@ -77,6 +79,7 @@ $$
 
 #### Hit Rate@K
 **Type**: Ranking
+
 **Goal**: A binary metric indicating if *at least one* relevant item appeared in the recommendation list.
 
 $$
@@ -90,6 +93,7 @@ $$
 
 #### NDCG@K (Normalized Discounted Cumulative Gain)
 **Type**: Ranking
+
 **Goal**: Measures ranking quality, giving higher importance to relevant items appearing **higher** up the list.
 
 $$
