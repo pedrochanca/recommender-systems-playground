@@ -18,3 +18,5 @@ __pycache__/
 .python-version
 *.dat
 *.csv
+*.jsonl
+*.gz
