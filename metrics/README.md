@@ -30,9 +30,8 @@ Ranking metrics are computed on the **Top-K** items predicted by the model for e
 ### Regression-based
 
 #### RMSE (Root Mean Squared Error)
-**Type**: Regression / Accuracy
-
-**Goal**: Measures how close the predicted ratings are to the true ratings.
+* **Type**: Regression / Accuracy
+* **Goal**: Measures how close the predicted ratings are to the true ratings.
 
 $$
 RMSE = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (y_{pred, i} - y_{true, i})^2}
@@ -46,8 +45,8 @@ $$
 ### Ranking-based
 
 #### Precision@K
-**Type**: Ranking
-**Goal**: Measures the proportion of relevant items within the recommended Top-K list.
+* **Type**: Ranking
+* **Goal**: Measures the proportion of relevant items within the recommended Top-K list.
 
 $$
 Precision@K = \frac{\text{Number of Relevant Items in Top K}}{K}
@@ -61,9 +60,8 @@ $$
 ---
 
 #### Recall@K
-**Type**: Ranking
-
-**Goal**: Measures how many relevant items the model found, compared to how many exist in total for that user.
+* **Type**: Ranking
+* **Goal**: Measures how many relevant items the model found, compared to how many exist in total for that user.
 
 $$
 Recall@K = \frac{\text{Number of Relevant Items in Top K}}{\text{Total Number of Relevant Items}}
@@ -78,9 +76,8 @@ $$
 ---
 
 #### Hit Rate@K
-**Type**: Ranking
-
-**Goal**: A binary metric indicating if *at least one* relevant item appeared in the recommendation list.
+* **Type**: Ranking
+* **Goal**: A binary metric indicating if *at least one* relevant item appeared in the recommendation list.
 
 $$
 HitRate@K = \mathbb{I}(\text{Number of Relevant Items in Top K} > 0)
@@ -92,15 +89,14 @@ $$
 ---
 
 #### NDCG@K (Normalized Discounted Cumulative Gain)
-**Type**: Ranking
-
-**Goal**: Measures ranking quality, giving higher importance to relevant items appearing **higher** up the list.
+* **Type**: Ranking
+* **Goal**: Measures ranking quality, giving higher importance to relevant items appearing **higher** up the list.
 
 $$
 NDCG@K = \frac{DCG@K}{IDCG@K}
 $$
 
-**DCG (Discounted Cumulative Gain)**:
+* **DCG (Discounted Cumulative Gain)**:
 
 $$
 DCG@K = \sum_{i=1}^{K} \frac{rel_i}{\log_2(i + 1)}
