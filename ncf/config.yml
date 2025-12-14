@@ -14,45 +14,57 @@ SimpleNCF:
     epochs: 3
     learning_rate: [1.0e-3, 5.0e-4, 1.0e-4]
     batch_size: [128, 256, 512]
-    dropout: [0.0, 0.2, 0.5]
-    layers:
-      - [64, 32, 16] # Architecture A
-      - [128, 64, 32] # Architecture B
+
+    # scheduler
     step_size: [3]
     gamma: [0.7]
-    weight_decay: [1.0e-5]
+
+    # embedding dimensions
+    emb_dim: [32]
+
+    # log / evaluation
+    log_every: [20]
+    threshold: [3.5]
 
   optim_params:
     epochs: 1
     learning_rate: 0.001
     batch_size: 4
 
-    layers: 64
+    # scheduler
+    step_size: 3
+    gamma: 0.7
 
     # embedding dimensions
     emb_dim: 32
 
-    # Scheduler
-    step_size: 3
-    gamma: 0.7
-
-    # log
+    # log / evaluation
     log_every: 2000
+    threshold: 3.5
 
 DeepNCF:
   tuning:
-    epochs: [1]
+    epochs: [20]
     learning_rate: [1.0e-3]
     batch_size: [128, 256]
-    dropout: [0.2]
+
+    dropout: [0.0, 0.2]
     layers:
-      - [64, 32, 16] # Architecture A
-      - [32, 16, 8] # Architecture B
+      - [64, 32, 16]
+      - [32, 16, 8]
+
+    # weight_decay: [1.0e-5]
+
+    # embedding dimensions
+    emb_dim: [32]
+
+    # scheduler
     step_size: [3]
     gamma: [0.7]
-    weight_decay: [1.0e-5]
+
+    # log / evaluation
     log_every: [20]
-    emb_dim: [32]
+    threshold: [3.5]
 
   optim_params:
     epochs: 1
@@ -67,9 +79,10 @@ DeepNCF:
     # embedding dimensions
     emb_dim: 32
 
-    # Scheduler
+    # scheduler
     step_size: 3
     gamma: 0.7
 
-    # log
+    # log / evaluation
     log_every: 20
+    threshold: 3.5

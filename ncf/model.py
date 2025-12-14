@@ -56,25 +56,24 @@ class DeepNCF(nn.Module):
 
         emb_dim = kwargs.get("emb_dim")
         dropout = kwargs.get("dropout")
+        layers = kwargs.get("layers")
 
         self.user_embedding = nn.Embedding(n_users, emb_dim)
         self.item_embedding = nn.Embedding(n_items, emb_dim)
 
-        concat_dim = emb_dim * 2
-
         self.fc = nn.Sequential(
             OrderedDict(
                 [
-                    # Layer 1: 64 -> 32
-                    ("lin_1", nn.Linear(concat_dim, concat_dim // 2)),
+                    # Layer 1
+                    ("lin_1", nn.Linear(layers[0], layers[1])),
                     ("relu_1", nn.ReLU()),
                     ("drop_1", nn.Dropout(dropout)),
-                    # Layer 2: 32 -> 16
-                    ("lin_2", nn.Linear(concat_dim // 2, concat_dim // 4)),
+                    # Layer 2
+                    ("lin_2", nn.Linear(layers[1], layers[2])),
                     ("relu_2", nn.ReLU()),
                     ("drop_2", nn.Dropout(dropout)),
-                    # Output Layer: 16 -> 1
-                    ("lin_3", nn.Linear(concat_dim // 4, 1)),
+                    # Output Layer
+                    ("lin_3", nn.Linear(layers[2], 1)),
                 ]
             )
         )
