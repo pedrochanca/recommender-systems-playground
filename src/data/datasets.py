@@ -8,24 +8,24 @@ from src.data.samplers import NegativeSampler
 class OfflineImplicitDataset(Dataset):
     """
     Simple offline implicit dataset:
-    Each row is a single (user, item, label) example.
+    Each row is a single (user, item, target) example.
 
     Intended for evaluation where negatives have been precomputed offline.
     """
 
-    def __init__(self, users, items, labels):
+    def __init__(self, users, items, targets):
         self.users = users
         self.items = items
-        self.labels = labels
+        self.targets = targets
 
     def __len__(self) -> int:
         return len(self.users)
 
     def __getitem__(self, idx: int):
         return {
-            "users": torch.tensor(self.users[idx], dtype=torch.long),
-            "items": torch.tensor(self.items[idx], dtype=torch.long),
-            "labels": torch.tensor(self.labels[idx], dtype=torch.float32),
+            "users": torch.tensor(int(self.users[idx]), dtype=torch.long),
+            "items": torch.tensor(int(self.items[idx]), dtype=torch.long),
+            "targets": torch.tensor(self.targets[idx], dtype=torch.float32),
         }
 
 
@@ -54,29 +54,29 @@ class PointwiseImplicitDataset(Dataset):
         return len(self.users)
 
     def __getitem__(self, idx: int) -> Any:
-        u = int(self.users[idx])
-        i_pos = int(self.items[idx])
-        t = int(self.timestamps[idx])
+        user = int(self.users[idx])
+        item = int(self.items[idx])
+        timestamp = int(self.timestamps[idx])
 
         # 1 positive
-        user_ids = [u]
-        item_ids = [i_pos]
-        labels = [1.0]
+        user_ids = [user]
+        item_ids = [item]
+        targets = [1.0]
 
         # K negatives
         neg_items = self.negative_sampler.sample(
             user_id=u,
             n_negatives=self.n_negatives,
-            current_timestamp=t,  # ignored for now, used later if time-aware
+            current_timestamp=timestamp,  # ignored for now, used later if time-aware
         )
 
         for j in neg_items:
-            user_ids.append(u)
+            user_ids.append(user)
             item_ids.append(int(j))
-            labels.append(0.0)
+            targets.append(0.0)
 
         return {
             "users": torch.tensor(user_ids, dtype=torch.long),
             "items": torch.tensor(item_ids, dtype=torch.long),
-            "labels": torch.tensor(labels, dtype=torch.float32),
+            "targets": torch.tensor(targets, dtype=torch.float32),
         }

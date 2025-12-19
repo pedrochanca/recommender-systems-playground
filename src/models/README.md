@@ -134,6 +134,6 @@ https://github.com/guoyang9/NCF
 6. **Output a predicted score**
     - Final layer (with sigmoid) outputs  y^_ui ∈ (0,1) = predicted probability that user u interacts with item i.
 
-7. **Train with labels**
-    - Compare y^_ui to the true label y_ui (1 for observed, 0 for sampled negative) using binary cross-entropy.
+7. **Train with targets**
+    - Compare y^_ui to the true target y_ui (1 for observed, 0 for sampled negative) using binary cross-entropy.
     - Backpropagate the loss to update both embeddings and MLP weights.

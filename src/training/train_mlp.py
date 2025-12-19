@@ -20,12 +20,12 @@ def train_model(
     Expects each batch from `loader` to be a dict:
       - "users":  LongTensor of shape (B,) or (B, K+1)
       - "items":  LongTensor of shape (B,) or (B, K+1)
-      - "labels": FloatTensor of shape (B,) or (B, K+1) with values in {0,1}
+      - "targets": FloatTensor of shape (B,) or (B, K+1) with values in {0,1}
 
     The function flattens these to 1D before feeding them to the model:
       users_flat  : (N,)
       items_flat  : (N,)
-      labels_flat : (N,)
+      targets_flat : (N,)
 
     epochs: # nb. of times we go through the train set
 
@@ -60,21 +60,21 @@ def train_model(
             # --------------------------------------------------------------------------
             users = batch["users"].to(device)
             items = batch["items"].to(device)
-            true_labels = batch["labels"].to(device)
+            true_targets = batch["targets"].to(device)
 
-            # users/items/labels may be (B,) or (B, K+1). Flatten to 1D.
+            # users/items/targets may be (B,) or (B, K+1). Flatten to 1D.
             users = users.view(-1)
             items = items.view(-1)
-            true_labels = true_labels.view(-1).to(torch.float32)
+            true_targets = true_targets.view(-1).to(torch.float32)
 
             # --------------------------------------------------------------------------
             # ----- Forward pass
             # --------------------------------------------------------------------------
             # Model should return shape (N,) or (N,1); we flatten to (N,)
-            pred_labels = model(users, items).view(-1)
+            pred_targets = model(users, items).view(-1)
 
             # loss_func is expected to have reduction="none"; shape (N,)
-            loss = loss_func(pred_labels, true_labels)
+            loss = loss_func(pred_targets, true_targets)
 
             # --------------------------------------------------------------------------
             # ----- Backward pass
@@ -96,7 +96,7 @@ def train_model(
             # Sum the vector directly for logging
             # loss.sum() adds up the squared errors of all X users in the batch
             total_loss += loss.sum().item()
-            total_samples += true_labels.numel()
+            total_samples += true_targets.numel()
 
             if (step_i + 1) % log_every == 0:
                 avg_loss = total_loss / max(total_samples, 1)
@@ -127,7 +127,7 @@ def evaluate_model(
     Evaluation loop for pointwise implicit data.
 
     Expects the same batch structure as `train_model`:
-        - "users", "items", "labels" tensors, possibly (B, K+1) or (B,).
+        - "users", "items", "targets" tensors, possibly (B, K+1) or (B,).
 
     Returns the average loss per example over the entire loader.
     """
@@ -145,19 +145,19 @@ def evaluate_model(
             # --------------------------------------------------------------------------
             users = batch["users"].to(device)
             items = batch["items"].to(device)
-            true_labels = batch["labels"].to(device)
+            true_targets = batch["targets"].to(device)
 
             users = users.view(-1)
             items = items.view(-1)
-            labels = labels.view(-1).to(torch.float32)
+            targets = targets.view(-1).to(torch.float32)
 
             # --------------------------------------------------------------------------
             # ----- Pred & Loss
             # --------------------------------------------------------------------------
-            pred_labels = model(users, items)
+            pred_targets = model(users, items)
 
-            loss = loss_func(pred_labels, true_labels)  # (N,)
+            loss = loss_func(pred_targets, true_targets)  # (N,)
             total_loss += loss.sum().item()
-            total_samples += labels.numel()
+            total_samples += targets.numel()
 
     return total_loss / max(total_samples, 1)
