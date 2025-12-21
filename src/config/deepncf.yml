@@ -29,7 +29,7 @@ hparam_tune:
   dataset_names:
     - "train"
     - "val"
-    - "interactions"
+    - "full"
 
 hparam_optim:
   epochs: 1
@@ -54,4 +54,4 @@ hparam_optim:
   dataset_names:
     - "train_val"
     - "test"
-    - "interactions"
+    - "full"

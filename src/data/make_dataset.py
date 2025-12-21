@@ -16,7 +16,7 @@ from src.utils.constants import (
 # --------------------------------------------------------------------------------------
 
 
-def preprocess_dataframe(df: pd.DataFrame):
+def clean_raw_dataframe(df: pd.DataFrame):
 
     # encode the user and item id to start from 0 (this is what nn.Embedding expects)
     # this prevents us from run into index out of bound "error" with Embedding lookup
@@ -107,7 +107,11 @@ def add_negative_interactions(
 
 
 def ml_latest_small_user_item_interactions(
-    val_split: float, test_split: float, n_negatives: int, random_seed: int
+    data_dir: str,
+    val_split: float,
+    test_split: float,
+    n_negatives: int,
+    random_seed: int,
 ):
 
     input_file = f"data/silver/ml-latest-small/ratings.parquet"
@@ -125,7 +129,7 @@ def ml_latest_small_user_item_interactions(
     )
     df[TARGET] = 1.0
 
-    df, _, _ = preprocess_dataframe(df)
+    df, _, _ = clean_raw_dataframe(df)
 
     df_train_val, df_test = model_selection.train_test_split(
         df, test_size=test_split, random_state=random_seed, stratify=df[TARGET].values
@@ -165,12 +169,11 @@ def ml_latest_small_user_item_interactions(
 
     print(len(df_train), len(df_val), len(df_train_val), len(df_test))
 
-    location = "data/gold/ml-latest-small"
-    df.to_parquet(f"{location}/interactions.parquet", index=False)
-    df_train.to_parquet(f"{location}/train.parquet", index=False)
-    df_val.to_parquet(f"{location}/val.parquet", index=False)
-    df_train_val.to_parquet(f"{location}/train_val.parquet", index=False)
-    df_test.to_parquet(f"{location}/test.parquet", index=False)
+    df.to_parquet(f"{data_dir}/full.parquet", index=False)
+    df_train.to_parquet(f"{data_dir}/train.parquet", index=False)
+    df_val.to_parquet(f"{data_dir}/val.parquet", index=False)
+    df_train_val.to_parquet(f"{data_dir}/train_val.parquet", index=False)
+    df_test.to_parquet(f"{data_dir}/test.parquet", index=False)
 
 
 if __name__ == "__main__":
