@@ -202,7 +202,7 @@ class NCFModel(object):
                 # ----------------------------------------------------------------------
                 # ----- Pred & Loss
                 # ----------------------------------------------------------------------
-                pred_targets = self.model(users, items)
+                pred_targets = self.model(users, items).view(-1)
 
                 loss = self.loss_func(pred_targets, true_targets)  # (N,)
                 total_loss += loss.sum().item()

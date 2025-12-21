@@ -1,26 +1,12 @@
-import pandas as pd
 import numpy as np
 import argparse
 import yaml
 import matplotlib.pyplot as plt
 
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-
-from src.models.ncf import SimpleNCF, DeepNCF
-from src.training.eval import collect_user_predictions, compute_metrics
-from src.training.train_mlp import train_model, evaluate_model
-from src.data.datasets import PointwiseImplicitDataset, OfflineImplicitDataset
 from src.utils.hparam_search import param_comb
-from src.data.samplers import GlobalUniformNegativeSampler
-
-from src.utils.constants import (
-    DEFAULT_USER_COL as USER_COL,
-    DEFAULT_ITEM_COL as ITEM_COL,
-    DEFAULT_TARGET_COL as TARGET_COL,
-    DEFAULT_TIMESTAMP_COL as TIMESTAMP_COL,
-)
+from src.data.ncf import NCFDataset
+from src.models.ncf import NCFModel
+from src.metrics.evaluator import collect_user_predictions, compute_metrics
 
 
 def load_config(path):
@@ -28,39 +14,36 @@ def load_config(path):
         return yaml.safe_load(f)
 
 
-def main(MODEL_ARCHITECTURE, PLOT, TUNE, CONFIG, VERBOSE):
+def main(MODEL_TYPE, PLOT, TUNE, VERBOSE):
 
     # ----------------------------------------------------------------------------------
     # ------ Global Parameters
     # ----------------------------------------------------------------------------------
+    CONFIG = load_config(f"src/config/{MODEL_TYPE.lower()}.yml")
 
-    DEVICE = CONFIG["system"]["device"]
-    LOCATION = CONFIG["data"]["location"]
+    DEVICE = CONFIG["info"]["device"]
+    DATA_DIR = CONFIG["info"]["data_dir"]
+    RANDOM_SEED = CONFIG["info"]["random_seed"]
+    MODEL_DIR = CONFIG["info"]["model_dir"]
+
     if TUNE:
-        MODEL_CONFIG = CONFIG[MODEL_ARCHITECTURE]["tuning"]
-        TRAIN_FILE = "train"
-        TEST_FILE = "val"
+        MODEL_CONFIG = CONFIG["hparam_tune"]
     else:
-        MODEL_CONFIG = CONFIG[MODEL_ARCHITECTURE]["optim_params"]
-        TRAIN_FILE = "train_val"
-        TEST_FILE = "test"
+        MODEL_CONFIG = CONFIG["hparam_optim"]
 
     # ----------------------------------------------------------------------------------
     # ------ Data
     # ----------------------------------------------------------------------------------
 
-    df_train = pd.read_parquet(f"{LOCATION}/{TRAIN_FILE}.parquet")
-    df_test = pd.read_parquet(f"{LOCATION}/{TEST_FILE}.parquet")
+    train_file = MODEL_CONFIG["dataset_names"][0]
+    test_file = MODEL_CONFIG["dataset_names"][1]
+    full_file = MODEL_CONFIG["dataset_names"][2]
 
-    df_interactions = pd.read_parquet(f"{LOCATION}/interactions.parquet")
-    user_positive_items = (
-        df_interactions.groupby(USER_COL)[ITEM_COL].apply(set).to_dict()
+    data = NCFDataset(
+        train_file_path=f"{DATA_DIR}/{train_file}.parquet",
+        test_file_path=f"{DATA_DIR}/{test_file}.parquet",
+        full_file_path=f"{DATA_DIR}/{full_file}.parquet",
     )
-
-    n_users = df_interactions[USER_COL].max() + 1
-    n_items = df_interactions[ITEM_COL].max() + 1
-
-    negative_sampler = GlobalUniformNegativeSampler(n_items, user_positive_items)
 
     # ----------------------------------------------------------------------------------
     # ------ MAIN: Tune OR evaluate
@@ -72,7 +55,7 @@ def main(MODEL_ARCHITECTURE, PLOT, TUNE, CONFIG, VERBOSE):
         # MERGE: Combine fixed settings with current trial settings
         # This ensures 'step_size' and 'gamma' are available
 
-        print(f"Testing: {hparams}")
+        print(f"vebose: {hparams}")
 
         # ------------------------------------------------------------------------------
         # ------ Model Related Parameters
@@ -85,6 +68,7 @@ def main(MODEL_ARCHITECTURE, PLOT, TUNE, CONFIG, VERBOSE):
         STEP_SIZE = hparams["step_size"]
         GAMMA = hparams["gamma"]
 
+        LEARNING_RATE = hparams["learning_rate"]
         LAYERS = hparams["layers"]
         DROPOUT = hparams["dropout"]
 
@@ -92,73 +76,25 @@ def main(MODEL_ARCHITECTURE, PLOT, TUNE, CONFIG, VERBOSE):
         THRESHOLD = hparams["threshold"]
 
         # ------------------------------------------------------------------------------
-        # ------ Prepare Dataset / Loader
-        # ------------------------------------------------------------------------------
-
-        train_dataset = PointwiseImplicitDataset(
-            users=df_train[USER_COL].values,
-            items=df_train[ITEM_COL].values,
-            timestamps=df_train[TIMESTAMP_COL].values,
-            negative_sampler=negative_sampler,
-            n_negatives=4,
-        )
-        train_loader = DataLoader(
-            train_dataset, batch_size=BATCH_SIZE, num_workers=N_WORKERS, shuffle=True
-        )
-
-        test_dataset = OfflineImplicitDataset(
-            users=df_test[USER_COL].values,
-            items=df_test[ITEM_COL].values,
-            targets=df_test[TARGET_COL].values,
-        )
-
-        test_loader = DataLoader(
-            test_dataset, batch_size=BATCH_SIZE, num_workers=N_WORKERS, shuffle=False
-        )
-
-        # ------------------------------------------------------------------------------
-        # ------ Model Dynamic Instantiation
-        # ------------------------------------------------------------------------------
-
-        print(f"Initializing {MODEL_ARCHITECTURE}...")
-        if MODEL_ARCHITECTURE == "SimpleNCF":
-            model = SimpleNCF(n_users=n_users, n_items=n_items, layers=LAYERS).to(
-                DEVICE
-            )
-        elif MODEL_ARCHITECTURE == "DeepNCF":
-            model = DeepNCF(
-                n_users=n_users,
-                n_items=n_items,
-                layers=LAYERS,
-                dropout=DROPOUT,
-            ).to(DEVICE)
-        else:
-            raise ValueError(f"Model type '{MODEL_ARCHITECTURE}' not found in code.")
-
-        # ------------------------------------------------------------------------------
         # ------ Train
         # ------------------------------------------------------------------------------
 
-        loss_func = nn.MSELoss(reduction="none")
-
-        optimizer = torch.optim.Adam(model.parameters())
-
-        # Every `step_size` (epoch) calls to scheduler.step(), multiply the learning
-        # rate by `gamma`
-        # By default, Adam has a learning rate of 0.001
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=STEP_SIZE, gamma=GAMMA
+        ncf_model = NCFModel(
+            n_users=data.n_users,
+            n_items=data.n_items,
+            epochs=EPOCHS,
+            step_size=STEP_SIZE,
+            gamma=GAMMA,
+            learning_rate=LEARNING_RATE,
+            log_every=LOG_EVERY,
+            threshold=THRESHOLD,
+            layers=LAYERS,
+            dropout=DROPOUT,
+            model_type=MODEL_TYPE,
         )
 
-        model, all_losses_list = train_model(
-            train_loader,
-            model,
-            loss_func,
-            optimizer,
-            scheduler,
-            device=DEVICE,
-            epochs=EPOCHS,
-            log_every=LOG_EVERY,
+        all_losses_list = ncf_model.train(
+            data.train_loader(batch_size=BATCH_SIZE, n_workers=N_WORKERS, shuffle=True)
         )
 
         # Plot Loss
@@ -172,7 +108,12 @@ def main(MODEL_ARCHITECTURE, PLOT, TUNE, CONFIG, VERBOSE):
         # ------------------------------------------------------------------------------
         # ------ Evaluation (Test set)
         # ------------------------------------------------------------------------------
-        test_loss = evaluate_model(test_loader, model, loss_func, DEVICE)
+
+        test_loader = data.test_loader(
+            batch_size=BATCH_SIZE, n_workers=N_WORKERS, shuffle=False
+        )
+
+        test_loss = ncf_model.evaluate(test_loader)
         print("Test Loss: {}\n".format(np.round(test_loss, 4)))
 
         if not TUNE:
@@ -180,7 +121,9 @@ def main(MODEL_ARCHITECTURE, PLOT, TUNE, CONFIG, VERBOSE):
             K = [1, 3, 5, 10, 20, 50, 100]
             metrics_to_compute = ["precision", "recall", "hit_rate", "ndcg"]
 
-            user_pred_true = collect_user_predictions(test_loader, model, DEVICE)
+            user_pred_true = collect_user_predictions(
+                test_loader, ncf_model.model, DEVICE
+            )
 
             for k in K:
 
@@ -221,10 +164,7 @@ if __name__ == "__main__":
         type=str,
         default="DeepNCF",
         choices=["SimpleNCF", "DeepNCF"],
-        help="Model architecture to use: SimpleNCF or DeepNCF",
-    )
-    parser.add_argument(
-        "--config", type=str, default="src/config/ncf.yml", help="Path to config file"
+        help="Model type to use: SimpleNCF or DeepNCF",
     )
     parser.add_argument(
         "--plot",
@@ -243,10 +183,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    main(
-        MODEL_ARCHITECTURE=args.model,
-        PLOT=args.plot,
-        TUNE=args.tune,
-        CONFIG=load_config(args.config),
-        VERBOSE=args.verbose,
-    )
+    main(MODEL_TYPE=args.model, PLOT=args.plot, TUNE=args.tune, VERBOSE=args.verbose)
