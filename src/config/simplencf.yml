@@ -1,8 +1,9 @@
 info:
-  data_location: "data/gold/ml-latest-small"
+  input_data_dir: "data/raw/ml-latest-small"
+  output_data_dir: "data/processed/ml-latest-small"
   random_seed: 42
   device: "cpu" # "cuda", "cpu", or "auto"
-  save_dir: "src/models"
+  model_dir: "src/models"
 
 hparam_tune:
   epochs: 3
@@ -27,7 +28,7 @@ hparam_tune:
   dataset_names:
     - "train"
     - "val"
-    - "interactions"
+    - "full"
 
 hparam_optim:
   epochs: 1
@@ -51,4 +52,4 @@ hparam_optim:
   dataset_names:
     - "train_val"
     - "test"
-    - "interactions"
+    - "full"

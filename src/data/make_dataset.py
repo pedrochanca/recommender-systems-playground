@@ -1,8 +1,9 @@
 import argparse
 import numpy as np
 import pandas as pd
-from typing import Dict, Set
+from typing import Dict, Set, Tuple
 from sklearn import model_selection, preprocessing
+from pathlib import Path
 
 from src.utils.constants import (
     DEFAULT_USER_COL as USER_COL,
@@ -16,20 +17,49 @@ from src.utils.constants import (
 # --------------------------------------------------------------------------------------
 
 
-def clean_raw_dataframe(df: pd.DataFrame):
+def clean_raw_dataframe(
+    df: pd.DataFrame,
+) -> Tuple[pd.DataFrame, int, int]:
+    """
+    Fit user and item ID encoders on the full dataframe and remap IDs to contiguous
+    indices starting from 0, suitable for nn.Embedding.
 
-    # encode the user and item id to start from 0 (this is what nn.Embedding expects)
-    # this prevents us from run into index out of bound "error" with Embedding lookup
-    lbl_user = preprocessing.LabelEncoder()
-    lbl_item = preprocessing.LabelEncoder()
+    The ID mapping (LabelEncoder / index mapping) must be done once on the full dataset,
+    then split, and use that mapping everywhere.
 
-    df.user_id = lbl_user.fit_transform(df.user_id.values)
-    df.item_id = lbl_item.fit_transform(df.item_id.values)
+    Parameters
+    ----------
+    df
+        Raw interactions dataframe with at least columns:
+        - USER_COL
+        - ITEM_COL
 
-    n_users = len(lbl_user.classes_)
-    n_items = len(lbl_item.classes_)
+    Returns
+    -------
+    df_encoded
+        Copy of the input dataframe with USER_COL and ITEM_COL replaced by
+        integer indices in [0, n_users) and [0, n_items), respectively.
+    n_users
+        Number of unique users (embedding size for user_embedding).
+    n_items
+        Number of unique items (embedding size for item_embedding).
+    user_encoder
+        Fitted LabelEncoder for user IDs (for future transform).
+    item_encoder
+        Fitted LabelEncoder for item IDs.
+    """
+    df_encoded = df.copy()
 
-    return df, n_users, n_items
+    user_encoder = preprocessing.LabelEncoder()
+    item_encoder = preprocessing.LabelEncoder()
+
+    df_encoded[USER_COL] = user_encoder.fit_transform(df_encoded[USER_COL].values)
+    df_encoded[ITEM_COL] = item_encoder.fit_transform(df_encoded[ITEM_COL].values)
+
+    n_users = len(user_encoder.classes_)
+    n_items = len(item_encoder.classes_)
+
+    return df_encoded, n_users, n_items
 
 
 def add_negative_interactions(
@@ -107,16 +137,62 @@ def add_negative_interactions(
 
 
 def ml_latest_small_user_item_interactions(
-    data_dir: str,
+    input_data_dir: str,
+    output_data_dir: str,
     val_split: float,
     test_split: float,
     n_negatives: int,
     random_seed: int,
-):
+) -> Tuple[int, int]:
+    """
+    Prepare implicit user-item interaction splits for ml-latest-small.
 
-    input_file = f"data/silver/ml-latest-small/ratings.parquet"
+    Steps:
+    - Load ratings parquet for ml-latest-small.
+    - Rename columns to internal names (USER_COL, ITEM_COL, TIMESTAMP_COL, TARGET_COL).
+    - Convert explicit ratings to implicit feedback (TARGET_COL = 1.0 for all interactions).
+    - Encode user_id and item_id to contiguous indices [0, n_users), [0, n_items).
+    - Randomly split into train / val / test on interactions (not stratified by label,
+      since labels are all 1.0 for positives).
+    - Optionally add offline negative interactions to val and test via
+      `add_negative_interactions`.
+    - Save:
+        full.parquet      : all encoded interactions (positives only)
+        train.parquet     : training positives
+        val.parquet       : validation positives (+ negatives if n_negatives > 0)
+        train_val.parquet : train + val positives (no negatives)
+        test.parquet      : test positives (+ negatives if n_negatives > 0)
 
-    df = pd.read_parquet(input_file)
+    Parameters
+    ----------
+    input_data_dir
+        Input directory in which to save the processed parquet files.
+    output_data_dir
+        Output directory in which to save the processed parquet files.
+    val_split
+        Fraction of the data (of the remaining after test_split) to allocate to validation.
+        For example, val_split=0.1, test_split=0.2 → 20% test, 10% of original as val.
+    test_split
+        Fraction of the full dataset to allocate to test.
+    n_negatives
+        Number of offline negatives per positive to sample for val and test.
+        If 0, no negatives are added (only positives are saved).
+    random_seed
+        Random seed for reproducible splits and negative sampling.
+
+    Returns
+    -------
+    n_users
+        Total number of unique encoded users in the dataset.
+    n_items
+        Total number of unique encoded items in the dataset.
+    """
+
+    input_data_dir = Path(output_data_dir)
+    output_data_dir_path = Path(output_data_dir)
+    output_data_dir_path.mkdir(parents=True, exist_ok=True)
+
+    df = pd.read_parquet(input_data_dir / "ratings.parquet")
 
     df.rename(
         columns={
@@ -127,37 +203,48 @@ def ml_latest_small_user_item_interactions(
         },
         inplace=True,
     )
+
+    # Explicit -> implicit: everything in this file is a positive interaction
     df[TARGET_COL] = 1.0
 
-    df, _, _ = clean_raw_dataframe(df)
+    # Encode user and item IDs **on the full dataframe**
+    df, n_users, n_items = clean_raw_dataframe(df)
 
+    # ----------------------------------------------------------------------------------
+    # ----- Splits (cannot stratify on TARGET_COL because all labels are 1.0)
+    # ----- If later timebased: drop SHUFFLE = True
+    # ----------------------------------------------------------------------------------
     df_train_val, df_test = model_selection.train_test_split(
         df,
         test_size=test_split,
         random_state=random_seed,
-        stratify=df[TARGET_COL].values,
+        shuffle=True,
+        stratify=None,
     )
 
     # Adjust val ratio relative to the remaining data
-    relative_val_size = val_split / (1 - test_split)
+    relative_val_size = val_split / (1.0 - test_split)
 
     df_train, df_val = model_selection.train_test_split(
         df_train_val,
         test_size=relative_val_size,
         random_state=random_seed,
-        stratify=df_train_val[TARGET_COL].values,
+        shuffle=True,
+        stratify=None,
     )
 
-    if n_negatives != 0:
-
+    # ----------------------------------------------------------------------------------
+    # ----- Offline negatives for validation and test
+    # ----------------------------------------------------------------------------------
+    if n_negatives > 0:
+        # build global user -> positive items mask from full df
         user_positive_items = df.groupby(USER_COL)[ITEM_COL].apply(set).to_dict()
-
-        n_items = df[ITEM_COL].max() + 1
+        n_items_total = df[ITEM_COL].max() + 1  # should equal n_items
 
         df_val = add_negative_interactions(
             df=df_val,
             user_positive_items=user_positive_items,
-            n_items=n_items,
+            n_items=n_items_total,
             n_negatives=n_negatives,
             random_seed=random_seed,
         )
@@ -165,18 +252,29 @@ def ml_latest_small_user_item_interactions(
         df_test = add_negative_interactions(
             df=df_test,
             user_positive_items=user_positive_items,
-            n_items=n_items,
+            n_items=n_items_total,
             n_negatives=n_negatives,
             random_seed=random_seed,
         )
 
-    print(len(df_train), len(df_val), len(df_train_val), len(df_test))
+    print(
+        f"Sizes -> train: {len(df_train)}, "
+        f"val: {len(df_val)}, "
+        f"train_val: {len(df_train_val)}, "
+        f"test: {len(df_test)}, "
+        f"full: {len(df)}"
+    )
 
-    df.to_parquet(f"{data_dir}/full.parquet", index=False)
-    df_train.to_parquet(f"{data_dir}/train.parquet", index=False)
-    df_val.to_parquet(f"{data_dir}/val.parquet", index=False)
-    df_train_val.to_parquet(f"{data_dir}/train_val.parquet", index=False)
-    df_test.to_parquet(f"{data_dir}/test.parquet", index=False)
+    # -------------------------------------------------------------------------
+    # Persist splits
+    # -------------------------------------------------------------------------
+    df.to_parquet(output_data_dir_path / "full.parquet", index=False)
+    df_train.to_parquet(output_data_dir_path / "train.parquet", index=False)
+    df_val.to_parquet(output_data_dir_path / "val.parquet", index=False)
+    df_train_val.to_parquet(output_data_dir_path / "train_val.parquet", index=False)
+    df_test.to_parquet(output_data_dir_path / "test.parquet", index=False)
+
+    return n_users, n_items
 
 
 if __name__ == "__main__":

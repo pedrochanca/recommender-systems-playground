@@ -1,5 +1,6 @@
 info:
-  data_dir: "data/gold/ml-latest-small"
+  input_data_dir: "data/raw/ml-latest-small"
+  output_data_dir: "data/processed/ml-latest-small"
   random_seed: 42
   device: "cpu" # "cuda", "cpu", or "auto"
   model_dir: "src/models"
