@@ -1,4 +1,4 @@
-# Recommender Systems - Playground
+# Recommender Systems - Modeling Playground
 
 ![Dates](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pedrochanca/recommender-systems-playground/badges/dates.json)
 
